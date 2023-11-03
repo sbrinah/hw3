@@ -1,28 +1,100 @@
 ---
-title: ""
-author: ""
+title: "HW3"
+author: "Sabrina (Hsi-Hsuan) Yang"
 format:
   html:
     embed-resources: true
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
-
 ```{r}
-1 + 1
+library(forcats)
+library(tidytext)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
 ```
 
-You can add options to executable code like this
-
+Question 1
 ```{r}
-#| echo: false
-2 * 2
+pubmed <- read_csv ("https://raw.githubusercontent.com/USCbiostats/data-science-data/master/03_pubmed/pubmed.csv")
+pubmed %>%
+  unnest_tokens(token, abstract) %>%
+  count(token)%>%
+  top_n(20, n)%>%
+  ggplot(aes(n, fct_reorder(token,n)))+
+  geom_col()
 ```
+Top 7 words (the, of, and, in, to, a, with) are stop words; therefore, we should remove them
+ 
+```{r}
+#Removing the stop words
+pubmed %>%
+  unnest_tokens(word, abstract) %>%
+  anti_join(tidytext::stop_words)%>%
+  count(word, sort=T)%>%
+  top_n(20,n)%>%
+  ggplot(aes(n, fct_reorder(word, n)))+
+  geom_col()
+```
+The top 1 word is "covid", followed by the number "19", "patients" and "cancer" after removing stop words.
+```{r}
+#The 5 most common tokens for each search term after removing stop words
+pubmed %>%
+  unnest_tokens(word, abstract) %>%
+  anti_join(tidytext::stop_words) %>%
+  group_by(term) %>%
+  count(word) %>%
+  top_n(5,n)
+```
+Question 2
+```{r}
+pubmed %>%
+   unnest_ngrams(word, abstract, n = 2) %>%
+ count(word, sort = T) %>%
+ top_n(10,n) %>%
+ ggplot(aes(n, fct_reorder(word, n)))+
+ geom_col()
+```
+The second and third words are consist of all stop words, so it is better to remove them.
+```{r}
+#Removing stop words
+pubmed_2 <- pubmed %>%
+  unnest_ngrams(word, abstract ,n=2) %>%
+  separate (word, c("word1", "word2"),sep = " ") %>%
+  anti_join(
+    tidytext::stop_words, by =c("word1" = "word")
+  ) %>%
+  anti_join(
+    tidytext::stop_words, by =c("word2" = "word")
+  ) %>%
 
-The `echo: false` option disables the printing of code (only output is displayed).
+  unite(pubmed12, word1, word2, sep= " ")
+pubmed_2 %>%
+count(pubmed12, sort = T) %>%
+ top_n(10,n) %>%
+ ggplot(aes(n, fct_reorder(pubmed12, n)))+
+ geom_col()
+```
+Top 3 bigrams are "covid 19", "prostate cancer", "pre eclampsia."
+
+Question 3
+```{r}
+pubmed_3 <- pubmed %>%
+  unnest_tokens(abstract, abstract) %>% 
+  filter(!(abstract %in% stop_words$word)) %>%
+  count(abstract, term) %>%
+  group_by(term)%>%
+  bind_tf_idf(abstract, term, n) %>%
+  top_n(5, n) %>%
+  arrange(desc(tf_idf))
+pubmed_3 %>%
+  group_by(term) %>%
+  arrange(desc(tf_idf))
+```
+Top 5 tokens for "covid": covid, pandemic, 19, disease, patients.
+Top 5 tokens for "prostate cancer": prostate, cancer, disease, patients, treatment.
+Top 5 tokens for "preeclampsia": eclampsia, preeclampsia, pregnancy, pre, women.
+Top 5 tokens for "meningitis": meningitis, meningeal, csf, clinical, patients.
+Top 5 tokens for "cystic fibrosis": cf, fibrosis, cystic, disease, patients.
+The results for the top 5 tokens are the same to question 1. However, the way the results are showed is more meaningful than question 1 as more important information come first compared to question 1 where it is listed in alphabetical order.
